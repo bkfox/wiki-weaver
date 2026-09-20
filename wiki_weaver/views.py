@@ -1,33 +1,43 @@
+from __future__ import annotations
+
 from abc import ABC, abstractmethod
 from pathlib import Path
 from typing import Any, Generator
 
+from jinja import Environment
+
 from .models import Property, Model
-from .registry import ContentRegistry
+from .registry import ContentRegistry, ResolvedModel
 from .rendering import RenderContext, RenderedContent
 
 
-__all__ = ("View", "ModelPropertyView", "ModelWikiCategoryView", "ModelWikiTemplateView", "ModelWikiFormView", "TextView", "CssView", "PageView")
+__all__ = (
+    "View",
+    "ModelPropertyView",
+    "ModelWikiCategoryView",
+    "ModelWikiTemplateView",
+    "ModelWikiFormView",
+    "TextView",
+    "CssView",
+    "PageView",
+)
 
 
 class View(ABC):
-    name: str|None = None
+    name: str | None = None
 
     @property
     @abstractmethod
-    def title(self) -> str:
-        ...
-
+    def title(self) -> str: ...
 
     def get_context(self, render_context) -> dict[str, Any]:
-        return {
-            "view": self
-        }
-
+        return {"view": self}
 
     @abstractmethod
-    def render(self, render_context: RenderContext) -> RenderedContent:
-        ...
+    def render(self, render_context: RenderContext) -> RenderedContent: ...
+
+    def get_source(self) -> Path | None:
+        return None
 
 
 class TemplateView(View):
@@ -35,19 +45,25 @@ class TemplateView(View):
 
     def render(self, render_context):
         return self.render_template(render_context)
-    
+
     def render_template(self, render_context: RenderContext) -> RenderedContent:
         env = self.get_environment(render_context)
-        template = env.get_template( self.template_name )
-        content = template.render( **self.get_context(render_context) )
+        template = env.get_template(self.template_name)
+        content = template.render(**self.get_context(render_context))
         return RenderedContent(title=self.title, content=content)
+
+    def get_source(self, render_context: RenderContext) -> Path | None:
+        if self.template_name:
+            env = self.get_environment(render_context)
+            return env.get_template(self.template_name).filename
+        return super().get_source(render_context)
 
     def get_environment(self, render_context: RenderContext) -> Environment:
         return render_context.template_env
 
 
 class TextView(View):
-    def __init__(self, title: str, content: str=""):
+    def __init__(self, title: str, content: str = ""):
         self._title = title
         self.content = content
 
@@ -72,7 +88,14 @@ class FileView(TextView):
         return super().render(render_context)
 
     def render_file(self, render_context):
-        return RenderedContent(title=self.title, content=self.path.read_text(encoding="utf-8"))
+        return RenderedContent(
+            title=self.title, content=self.path.read_text(encoding="utf-8")
+        )
+
+    def get_source(self, render_context):
+        if self.path:
+            return self.path
+        return super().get_source(render_context)
 
 
 # ---- Model & properties
@@ -80,7 +103,7 @@ class ModelPropertyView(TemplateView):
     name = "property"
     template_name = "property.wiki.j2"
 
-    def __init__( self, name: str, property: Property, registry: ContentRegistry):
+    def __init__(self, name: str, property: Property, registry: ContentRegistry):
         self.name = name
         self.property = property
         self.registry = registry
@@ -91,9 +114,7 @@ class ModelPropertyView(TemplateView):
 
     def get_context(self, render_context) -> dict[str, Any]:
         enumeration = (
-            self.registry.get_enum(self.property.enum)
-            if self.property.enum
-            else None
+            self.registry.get_enum(self.property.enum) if self.property.enum else None
         )
 
         return {
@@ -106,7 +127,7 @@ class ModelPropertyView(TemplateView):
 
 class ModelView(View):
     name = "model"
-    
+
     def __init__(self, model: Model):
         self.model = model
 
@@ -153,7 +174,7 @@ class ModelPropertiesView(ModelView):
                 }
                 for name in self.model.infobox.groups
                 if name in self.model.groups
-            ]
+            ],
         }
 
     def get_property_context(self, name: str, property: Property) -> dict[str, Any]:
@@ -215,9 +236,7 @@ class ModelWikiFormView(ModelPropertiesView, TemplateView):
         )
 
         context["enumeration"] = (
-            self.registry.get_enum(property.enum)
-            if property.enum
-            else None
+            self.registry.get_enum(property.enum) if property.enum else None
         )
         context["target_category"] = (
             self.registry.get_model_category(property.target)
@@ -238,7 +257,7 @@ class CssView(FileView):
 class PageView(FileView, TemplateView):
     name = "page"
 
-    def __init__(self, title: str, template_name: str|None, path: str|None=None):
+    def __init__(self, title: str, template_name: str | None, path: str | None = None):
         super().__init__(title, path)
         self.template_name = template_name
 
@@ -262,11 +281,7 @@ class PageView(FileView, TemplateView):
         else:
             template_name, path_ = None, path
 
-        return cls(
-            title=title,
-            template_name=template_name,
-            path=path_
-        )
+        return cls(title=title, template_name=template_name, path=path_)
 
     @staticmethod
     def _page_title(root: Path, path: Path) -> str:
@@ -283,7 +298,7 @@ class PageView(FileView, TemplateView):
         if namespace:
             return f"{namespace}:{title}"
         return title
-        
+
     def render(self, render_context: RenderContext) -> RenderedContent:
         if self.path:
             return self.render_file(render_context)
