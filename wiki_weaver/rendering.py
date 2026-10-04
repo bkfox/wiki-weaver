@@ -9,20 +9,33 @@ from jinja2 import Environment, FileSystemLoader, StrictUndefined
 
 @dataclass(frozen=True)
 class RenderedContent:
+    """Content returned by a view."""
+
     title: str
     content: str
+    path: Path | None = None
+    """
+    Target file path where to write the content.
+
+    When not provided, the importer actually import into the MediaWiki database.
+    When provided, it will instead write the file at this place.
+    """
 
 
 @dataclass(frozen=True)
 class RenderContext:
     template_env: Environment
     page_env: Environment
+    static_dest: Path
 
     @classmethod
-    def from_directories(cls, template_dir: Path, page_dir: Path) -> RenderContext:
+    def from_directories(
+        cls, template_dir: Path, page_dir: Path, **kwargs
+    ) -> RenderContext:
         return cls(
             template_env=cls._create_environment(template_dir),
-            page_env=cls._create_environment(page_dir)
+            page_env=cls._create_environment(page_dir),
+            **kwargs,
         )
 
     @staticmethod

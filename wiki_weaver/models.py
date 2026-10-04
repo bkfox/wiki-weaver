@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Literal
+from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
@@ -43,20 +43,18 @@ class Property(BaseModel):
     @model_validator(mode="after")
     def validate_definition(self) -> Property:
         if self.type != "Page" and self.target is not None:
-            raise ValueError(
-                "'target' can only be used with properties of type 'Page'"
-            )
+            raise ValueError("'target' can only be used with properties of type 'Page'")
 
         if self.type == "Page" and self.enum is not None:
-            raise ValueError(
-                "'enum' cannot be used with properties of type 'Page'"
-            )
+            raise ValueError("'enum' cannot be used with properties of type 'Page'")
 
         return self
+
 
 class PropertyGroup(BaseModel):
     label: str
     properties: list[str]
+
 
 class PropertyFile(BaseModel):
     model_config = ConfigDict(extra="forbid")
@@ -77,8 +75,9 @@ class Model(BaseModel):
     description: str | None = None
     groups: list[str] = Field(default_factory=list)
     properties: dict[str, Property] = Field(default_factory=dict)
+    data: dict[str, Any] = Field(default_factory=dict)
 
-    category: Category 
+    category: Category
     infobox: Infobox = Field(default_factory=Infobox)
 
 

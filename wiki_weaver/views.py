@@ -1,10 +1,12 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
+import json
 from pathlib import Path
 from typing import Any, Generator
 
-from jinja import Environment
+from jinja2 import Environment
+from pydantic import BaseModel
 
 from .models import Property, Model
 from .registry import ContentRegistry, ResolvedModel
@@ -25,6 +27,12 @@ __all__ = (
 
 class View(ABC):
     name: str | None = None
+    dest: Path | None = None
+
+    def __init__(self, name: str | None = None, dest: Path | None = None):
+        if name:
+            self.name = name
+        self.dest = dest
 
     @property
     @abstractmethod
@@ -33,24 +41,34 @@ class View(ABC):
     def get_context(self, render_context) -> dict[str, Any]:
         return {"view": self}
 
-    @abstractmethod
-    def render(self, render_context: RenderContext) -> RenderedContent: ...
+    def render(self, render_context: RenderContext) -> RenderedContent:
+        return RenderedContent(
+            title=self.title,
+            content=self.get_content(render_context),
+            path=self.get_dest(render_context),
+        )
 
-    def get_source(self) -> Path | None:
+    @abstractmethod
+    def get_content(self, render_context: RenderContext) -> str: ...
+
+    def get_source(self, render_context: RenderContext) -> Path | None:
         return None
+
+    def get_dest(self, render_context: RenderContext) -> Path | None:
+        """Return destination path to which the rendered content shall be written."""
+        return self.dest
 
 
 class TemplateView(View):
     template_name: str
 
-    def render(self, render_context):
+    def get_content(self, render_context: RenderContext) -> RenderedContent:
         return self.render_template(render_context)
 
     def render_template(self, render_context: RenderContext) -> RenderedContent:
         env = self.get_environment(render_context)
         template = env.get_template(self.template_name)
-        content = template.render(**self.get_context(render_context))
-        return RenderedContent(title=self.title, content=content)
+        return template.render(**self.get_context(render_context))
 
     def get_source(self, render_context: RenderContext) -> Path | None:
         if self.template_name:
@@ -62,17 +80,44 @@ class TemplateView(View):
         return render_context.template_env
 
 
-class TextView(View):
-    def __init__(self, title: str, content: str = ""):
+class TitledView(View):
+    def __init__(self, title: str, **kwargs):
         self._title = title
-        self.content = content
+        super().__init__(**kwargs)
 
     @property
     def title(self) -> str:
         return self._title
 
-    def render(self, render_context: RenderContext) -> RenderedContent:
-        return RenderedContent(title=self.title, content=self.content)
+
+class TextView(TitledView):
+    def __init__(self, title: str, content: str = "", **kwargs):
+        self.content = content
+        super().__init__(title, **kwargs)
+
+    def get_content(self, render_context):
+        return self.content
+
+
+class JsonView(TitledView):
+    def __init__(
+        self,
+        title,
+        data: BaseModel | dict | list | None,
+        dest: Path | None = None,
+        **kwargs,
+    ):
+        self.data = data
+        super().__init__(title, **kwargs)
+
+    def get_content(self, render_context):
+        data = self.get_data(render_context)
+        if isinstance(data, BaseModel):
+            data = data.model_dump(mode="json")
+        return json.dumps(data)
+
+    def get_data(self, render_context):
+        return self.data
 
 
 class FileView(TextView):
@@ -82,15 +127,13 @@ class FileView(TextView):
         super().__init__(title, **kwargs)
         self.path = path
 
-    def render(self, render_context):
+    def get_content(self, render_context):
         if self.path:
             return self.render_file(render_context)
-        return super().render(render_context)
+        return super().get_content(render_context)
 
     def render_file(self, render_context):
-        return RenderedContent(
-            title=self.title, content=self.path.read_text(encoding="utf-8")
-        )
+        return self.path.read_text(encoding="utf-8")
 
     def get_source(self, render_context):
         if self.path:
@@ -103,14 +146,21 @@ class ModelPropertyView(TemplateView):
     name = "property"
     template_name = "property.wiki.j2"
 
-    def __init__(self, name: str, property: Property, registry: ContentRegistry):
-        self.name = name
+    def __init__(
+        self,
+        property_name: str,
+        property: Property,
+        registry: ContentRegistry,
+        **kwargs,
+    ):
+        self.property_name = property_name
         self.property = property
         self.registry = registry
+        super().__init__(**kwargs)
 
     @property
     def title(self) -> str:
-        return f"Property:{self.name}"
+        return f"Property:{self.property_name}"
 
     def get_context(self, render_context) -> dict[str, Any]:
         enumeration = (
@@ -119,7 +169,7 @@ class ModelPropertyView(TemplateView):
 
         return {
             **super().get_context(render_context),
-            "name": self.name,
+            "name": self.property_name,
             "property": self.property,
             "enumeration": enumeration,
         }
@@ -128,8 +178,9 @@ class ModelPropertyView(TemplateView):
 class ModelView(View):
     name = "model"
 
-    def __init__(self, model: Model):
+    def __init__(self, model: Model, **kwargs):
         self.model = model
+        super().__init__(**kwargs)
 
     def get_context(self, render_context) -> dict[str, Any]:
         return {
@@ -208,12 +259,8 @@ class ModelWikiFormView(ModelPropertiesView, TemplateView):
     name = "form"
     template_name = "form.wiki.j2"
 
-    def __init__(
-        self,
-        model: ResolvedModel,
-        registry: ContentRegistry,
-    ):
-        super().__init__(model)
+    def __init__(self, model: ResolvedModel, registry: ContentRegistry, **kwargs):
+        super().__init__(model, **kwargs)
         self.registry = registry
 
     @property
@@ -249,6 +296,33 @@ class ModelWikiFormView(ModelPropertiesView, TemplateView):
         return context
 
 
+class ModelsJsonView(JsonView):
+    name = "models-json"
+
+    def get_dest(self, render_context):
+        dest_dir = render_context.static_dest
+        dest_dir.mkdir(exist_ok=True)
+        return dest_dir / "models.js"
+
+    def get_data(self, render_context):
+        return [self.get_model_data(model) for model in self.data]
+
+    def get_model_data(self, model):
+        return {
+            "name": model.name,
+            "label": model.label,
+            "description": model.description,
+            "data": model.data,
+            "properties": {
+                k: v.model_dump(mode="json") for k, v in model.properties.items()
+            },
+        }
+
+    def get_content(self, resolved_models):
+        data = super().get_content(resolved_models)
+        return f"weaverModels={data}"
+
+
 # ---- Other views
 class CssView(FileView):
     name = "css"
@@ -257,8 +331,10 @@ class CssView(FileView):
 class PageView(FileView, TemplateView):
     name = "page"
 
-    def __init__(self, title: str, template_name: str | None, path: str | None = None):
-        super().__init__(title, path)
+    def __init__(
+        self, title: str, template_name: str | None, path: str | None = None, **kwargs
+    ):
+        super().__init__(title, path, **kwargs)
         self.template_name = template_name
 
     @classmethod
@@ -299,7 +375,7 @@ class PageView(FileView, TemplateView):
             return f"{namespace}:{title}"
         return title
 
-    def render(self, render_context: RenderContext) -> RenderedContent:
+    def get_content(self, render_context: RenderContext) -> RenderedContent:
         if self.path:
             return self.render_file(render_context)
         return self.render_template(render_context)

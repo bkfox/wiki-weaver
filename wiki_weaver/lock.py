@@ -63,7 +63,6 @@ class LockFile(BaseModel):
         write_json(path, self)
 
     def get_or_create_run(self, source, target):
-        breakpoint()
         run = next(
             (r for r in self.runs if r.source == source and r.target == target), None
         )
