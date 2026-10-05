@@ -82,6 +82,7 @@ def main(
             registry=registry,
             dry_run=dry_run,
             update=update,
+            lock_file=lock_file,
             run_info=lock_file.get_or_create_run(source, target),
         )
         if not importer.run_info.runned:

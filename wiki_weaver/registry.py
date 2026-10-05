@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from .models import Enumeration, Model, Property
+from .models import Enumeration, Model, Property, PropertyGroup
 
 
 @dataclass(frozen=True)
@@ -36,10 +36,7 @@ class ContentRegistry:
         self._validate_models()
 
     def resolve_models(self) -> list[ResolvedModel]:
-        return [
-            self.get_model(name)
-            for name in self.models
-        ]
+        return [self.get_model(name) for name in self.models]
 
     def get_enum(self, name: str) -> Enumeration:
         try:
@@ -53,18 +50,10 @@ class ContentRegistry:
         except KeyError:
             raise ValueError(f"Unknown model: {name}")
 
-        groups = {
-            group_name: self.groups[group_name]
-            for group_name in model.groups
-        }
+        groups = {group_name: self.groups[group_name] for group_name in model.groups}
         return ResolvedModel(
-            model=model,
-            properties=self._resolve_model_properties(model),
-            groups=groups
+            model=model, properties=self._resolve_model_properties(model), groups=groups
         )
-
-    def get_model_category(self, name: str) -> str:
-        return self.get_model(name).category.name
 
     def _validate_groups(self) -> None:
         for group_name, group in self.groups.items():
@@ -128,8 +117,7 @@ class ContentRegistry:
         for target in targets:
             if target not in model_names and target != "File":
                 raise ValueError(
-                    f"Property '{name}' references unknown "
-                    f"target model '{target}'"
+                    f"Property '{name}' references unknown " f"target model '{target}'"
                 )
 
     def _resolve_model_properties(

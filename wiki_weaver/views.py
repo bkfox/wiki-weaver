@@ -243,7 +243,7 @@ class ModelWikiCategoryView(ModelView, TemplateView):
 
     @property
     def title(self) -> str:
-        return f"Category:{self.model.category.name}"
+        return f"Category:{self.model.name}"
 
 
 class ModelWikiTemplateView(ModelPropertiesView, TemplateView):
@@ -286,7 +286,7 @@ class ModelWikiFormView(ModelPropertiesView, TemplateView):
             self.registry.get_enum(property.enum) if property.enum else None
         )
         context["target_category"] = (
-            self.registry.get_model_category(property.target)
+            self.registry.get_model(property.target).name
             if property.type == "Page"
             and isinstance(property.target, str)
             and property.target != "File"
@@ -312,6 +312,7 @@ class ModelsJsonView(JsonView):
             "name": model.name,
             "label": model.label,
             "description": model.description,
+            "mdiIcon": model.mdi_icon,
             "data": model.data,
             "properties": {
                 k: v.model_dump(mode="json") for k, v in model.properties.items()

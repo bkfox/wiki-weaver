@@ -21,7 +21,7 @@ class RunInfo(BaseModel):
 
     def shall_sync(self, title) -> bool:
         page = self.pages.get(title)
-        if not page or not page.path or not page.path.exists() or not self.synced:
+        if not page or not page.path or not page.path.exists() or not self.runned:
             return True
         return page.path.stat().st_mtime > page.synced.timestamp()
 
@@ -46,6 +46,8 @@ class LockFile(BaseModel):
     created: datetime = Field(default_factory=lambda: datetime.now(UTC))
     runs: list[RunInfo] = Field(default_factory=list)
 
+    _path: Path | None = None
+
     def updated_now(self):
         self.updated = datetime.now(UTC)
 
@@ -56,10 +58,19 @@ class LockFile(BaseModel):
             if not allow_create:
                 raise FileNotFoundError(f"File does not exists: {path}")
 
-            return LockFile()
-        return read_json(path, cls)
+            self = LockFile()
+        else:
+            self = read_json(path, cls)
+        self._path = path
+        return self
 
-    def save(self, path: Path):
+    def save(self, path: Path | None = None):
+        if not path:
+            path = self._path
+        if not path:
+            raise ValueError(
+                "LockFile not loaded from filesystem and no file provided."
+            )
         write_json(path, self)
 
     def get_or_create_run(self, source, target):

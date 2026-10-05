@@ -6,7 +6,7 @@ from rich import print
 
 from .registry import ContentRegistry, ResolvedModel
 from .rendering import RenderedContent, RenderContext
-from .lock import RunInfo
+from .lock import RunInfo, LockFile
 from .views import (
     ModelWikiCategoryView,
     ModelWikiFormView,
@@ -31,6 +31,7 @@ class MediaWikiImporter:
         mediawiki: Path,
         registry: ContentRegistry,
         dry_run: bool = False,
+        lock_file: LockFile | None = None,
         run_info: RunInfo | None = None,
         update: bool = False,
     ):
@@ -42,6 +43,7 @@ class MediaWikiImporter:
         """ Data types registry. """
         self.dry_run = dry_run
         self.context = self.get_context()
+        self.lock_file = lock_file
         self.run_info = run_info
         self.update = update
 
@@ -137,6 +139,7 @@ class MediaWikiImporter:
             self.run_info.synced(
                 view.title, view=view.name, path=view.get_source(self.context)
             )
+            self.lock_file and self.lock_file.save()
         print("")
 
     def _edit(self, content: RenderedContent) -> None:

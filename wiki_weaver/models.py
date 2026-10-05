@@ -71,21 +71,20 @@ class Model(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     name: str
+    """ Canonical name. """
     label: str
+    """ Displayed name. """
     description: str | None = None
+    """ Description. """
     groups: list[str] = Field(default_factory=list)
+    """ Property groups this model has. """
     properties: dict[str, Property] = Field(default_factory=dict)
-    data: dict[str, Any] = Field(default_factory=dict)
-
-    category: Category
+    """ Extra properties. """
+    mdi_icon: str | None = None
+    """ MDI icon. """
     infobox: Infobox = Field(default_factory=Infobox)
-
-
-class Category(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
-    name: str
-    label: str
+    """ Groups displayed in the infobox. """
+    data: dict[str, Any] = Field(default_factory=dict)
 
 
 class ModelFile(BaseModel):
