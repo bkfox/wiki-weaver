@@ -29,6 +29,13 @@ class Enumeration(BaseModel):
     values: dict[str, EnumValue]
 
 
+class PropertyInput(BaseModel):
+    """Page Form input."""
+
+    type: str
+    parameters: dict[str, Any] = Field(default_factory=dict)
+
+
 class Property(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -39,6 +46,7 @@ class Property(BaseModel):
     multiple: bool = False
     target: str | list[str] | None = None
     enum: str | None = None
+    input: PropertyInput | None = None
 
     @model_validator(mode="after")
     def validate_definition(self) -> Property:

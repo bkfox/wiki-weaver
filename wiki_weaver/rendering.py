@@ -28,10 +28,17 @@ class RenderContext:
     page_env: Environment
     static_dest: Path
 
+    _root_template = Path(__file__).parent.parent / "data" / "templates"
+
     @classmethod
     def from_directories(
         cls, template_dir: Path, page_dir: Path, **kwargs
     ) -> RenderContext:
+        if isinstance(template_dir, (str, Path)):
+            template_dir = [template_dir, cls._root_template]
+        else:
+            template_dir = [*template_dir, cls._root_template]
+
         return cls(
             template_env=cls._create_environment(template_dir),
             page_env=cls._create_environment(page_dir),

@@ -1,0 +1,27 @@
+{% macro pf_field(property) -%}
+    {{ '{{{' }}field|{{ property.name -}}
+    |label={{ property.label -}}
+    {%- if property.input -%}
+        |input type={{ property.input.type }}
+        {%- for name, value in property.input.parameters.items() -%}
+            |{{ name }}={{ value }}
+        {%- endfor %}
+    {%- elif property.enumeration -%}
+        |input type=dropdown|values=
+        {%- for key, value in property.enumeration.values.items() -%}
+            {{ key }}={{ value.label -}}
+            {%- if not loop.last -%};{% endif %}
+        {%- endfor %}
+    {%- elif property.property.type == "Page" %}
+        |input type=combobox
+        {%- if property.target_category -%}
+            |property={{ property.name -}}
+            |values from category={{ property.target_category }}
+        {%- endif %}
+    {%- elif property.property.type == "Geographic coordinate" -%}
+        |input type=leaflet
+    {%- endif %}
+    {%- if property.property.required %}|mandatory{% endif %}
+    {%- if property.property.multiple %}|list{% endif %}
+    {{- '}}}' }}
+{%- endmacro %}

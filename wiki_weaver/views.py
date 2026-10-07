@@ -292,6 +292,7 @@ class ModelWikiFormView(ModelPropertiesView, TemplateView):
             and property.target != "File"
             else None
         )
+        context["input"] = property.input
 
         return context
 
